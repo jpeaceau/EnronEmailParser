@@ -37,10 +37,13 @@ class EmailPipeline:
         child_emails: set[str] = set() if email_split_size <= 1 else email_split[1:-1]
 
         parent_processed_email, parent_timezone = self._process_parent_email(parent_email, message_cache, lock)
-        parent_hash = processed_emails
+        parent_hash = ""
         if isinstance(parent_processed_email, ProcessedEmail):
             processed_emails.add(parent_processed_email)
             parent_hash = parent_processed_email.email_hash
+        elif isinstance(parent_processed_email, str):
+            # Parent was cached, parent_processed_email is the hash string
+            parent_hash = parent_processed_email
         for child_email in child_emails:
             processed_child_email = self._process_child_email(child_email, parent_timezone, message_cache, lock, parent_hash)
             if processed_child_email:
@@ -101,6 +104,7 @@ class EmailPipeline:
         :param parent_timezone: Parent email timezone; it's assumed this and the child email's timezone are consistent.
         :param message_cache: The message cache instance for querying and updating.
         :param lock: Lock to access and update message_cache without race-conditions.
+        :param parent_hash: The hash of the parent email to link thread relationships.
         :return: ProcessedEmail objects, or None if all are already cached.
         """
         msg_re = re.search(self.child_msg_filter, email, flags=re.DOTALL)
@@ -127,10 +131,11 @@ class EmailPipeline:
         from_alias = ""
         if from_text:
             from_alias = helpers._extract_users(
-                text=from_text,
+                text=from_text.group(0),
                 regex=self.child_user_filter
             )
-            from_alias = from_text if not from_alias else from_alias
+            if not from_alias:
+                from_alias = {from_text.group(0)}
             users.update(from_alias)
         if to_text:
             users.update(helpers._extract_users(
@@ -143,5 +148,6 @@ class EmailPipeline:
             norm_date=norm_date,
             subject=subject,
             aliases=frozenset({user for user in users if user}),
-            sender=frozenset(from_alias)
+            sender=frozenset(from_alias) if from_alias else frozenset(),
+            parent_hash=parent_hash if parent_hash else None
         )

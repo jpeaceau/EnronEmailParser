@@ -99,7 +99,7 @@ def _extract_parent_users(email, fields: list[list[str]], regex) -> Tuple[Set[st
         users_re = re.search(regex, users_text)
         if to == "From" or to == "X-From":
             sender = users_re.group(1) if users_re and users_re.groups() else users_text
-            aliases.update(sender)
+            aliases.add(sender)
             continue
         # Expected match is False, as To and Cc aren't always present.
         if not global_utils.is_regex_populated(users_re, "Extracting parent users", email, False):

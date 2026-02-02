@@ -18,7 +18,7 @@ def _filter_invalid_aliases(aliases_set):
         if isinstance(alias, str):
             # Apply the new length logic
             if "@" in alias:
-                if len(alias) <= 60:
+                if 5 < len(alias) <= 60:
                     valid_aliases.add(alias)
             else:
                 if 5 < len(alias) <= 35:
@@ -154,11 +154,44 @@ def run(paths: dict):
 
     print(f"Stage 3: Found {len(matches_dict_2)} regex matches.")
 
-    # Stage 4: Final update to users and write final outputs
+    # Stage 4: Update after Stage 3
     user_df = _update_df(user_df, matches_dict_2)
 
-    # Combine both match dictionaries for the final user_map table
+    # Stage 5: Same-Name Deduplication
+    print(f"Stage 4: Deduplicating users with identical names...")
+
+    # Only process users with both first and last names
+    has_complete_name = (user_df["first_name"].str.strip() != "") & (user_df["last_name"].str.strip() != "")
+    named_users = user_df[has_complete_name].copy()
+
+    # Group by full name
+    named_users["full_name"] = (named_users["first_name"].str.strip() + " " +
+                                 named_users["last_name"].str.strip()).str.lower()
+
+    matches_dict_3 = {}
+    name_groups = named_users.groupby("full_name")
+
+    for full_name, group in name_groups:
+        if len(group) > 1:
+            # Multiple users with same name - merge them
+            # Use the user with the most aliases as the parent
+            group["alias_count"] = group["aliases"].apply(lambda x: len(x) if x else 0)
+            group_sorted = group.sort_values("alias_count", ascending=False)
+
+            parent_id = group_sorted.index[0]  # User with most aliases becomes parent
+            child_ids = group_sorted.index[1:]  # All others are children
+
+            for child_id in child_ids:
+                matches_dict_3[child_id] = parent_id
+
+    print(f"Stage 4: Found {len(matches_dict_3)} same-name duplicates to merge.")
+
+    # Stage 6: Final update and cleanup
+    user_df = _update_df(user_df, matches_dict_3)
+
+    # Combine all match dictionaries for the final user_map table
     matches_dict_1.update(matches_dict_2)
+    matches_dict_1.update(matches_dict_3)
 
     # Outputting the combined user map to parquet, as this is the "to delete" table
     df_to_delete = pd.DataFrame.from_dict(matches_dict_1, orient="index", columns=["parent_id"])
@@ -177,6 +210,7 @@ def run(paths: dict):
 
     user_df = user_df.reset_index()
     user_df.to_parquet(USER_TABLE_UPDATED_OUTPUT_PATH, engine="pyarrow", index=False)
-    print("Updated user table and user map created successfully.")
+    print(f"Updated user table created successfully.")
+    print(f"Total duplicates merged: {len(matches_dict_1)} (Stage 1: {len(matches_dict_1) - len(matches_dict_2) - len(matches_dict_3)}, Stage 3: {len(matches_dict_2)}, Stage 4: {len(matches_dict_3)})")
 
 

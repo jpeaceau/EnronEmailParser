@@ -12,7 +12,7 @@ def is_regex_populated(regex_obj, description, context: str, expected_match=True
     elif not regex_obj.groups():
         if expected_groups:
             raise ValueError(f"Regex match found, but no groups were found. Description: {description}\n"
-                             f"Contet: \n{context}")
+                             f"Context: \n{context}")
         else:
             return False
     return True
