@@ -1,4 +1,3 @@
-from pathlib import Path
 import pandas as pd
 import os
 import re
@@ -22,7 +21,7 @@ def _filter_invalid_aliases(aliases_set):
                 if len(alias) <= 60:
                     valid_aliases.add(alias)
             else:
-                if len(alias) <= 35:
+                if 5 < len(alias) <= 35:
                     valid_aliases.add(alias)
 
     return frozenset(valid_aliases)
