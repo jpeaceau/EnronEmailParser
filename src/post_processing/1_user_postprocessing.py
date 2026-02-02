@@ -208,6 +208,9 @@ def run(paths: dict):
     # Convert the 'aliases' column to a list before writing to Parquet to avoid ArrowInvalid error
     user_df["aliases"] = user_df["aliases"].apply(list)
 
+    # Remove generated_aliases - they were only used for matching, not needed in final output
+    user_df = user_df.drop(columns=["generated_aliases"])
+
     user_df = user_df.reset_index()
     user_df.to_parquet(USER_TABLE_UPDATED_OUTPUT_PATH, engine="pyarrow", index=False)
     print(f"Updated user table created successfully.")
